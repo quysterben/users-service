@@ -9,26 +9,21 @@ import hpp from 'hpp';
 import helmet from 'helmet';
 import cors from 'cors';
 import { verify } from 'jsonwebtoken';
+import { Channel } from 'amqplib';
 import compression from 'compression';
 import { checkConnection } from '@users/elasticsearch';
 import { appRoutes } from '@users/routes';
-// import { createConnection } from '@users/queues/connection';
-// import { Channel } from 'amqplib';
-// import {
-//   consumeBuyerDirectMessage,
-//   consumeReviewFanoutMessages,
-//   consumeSeedGigDirectMessages,
-//   consumeSellerDirectMessage
-// } from '@users/queues/user.consumer';
+import { createConnection } from '@users/queues/connetion';
+import { consumeBuyerDirectMessage } from '@users/queues/user.consumer';
 
 const SERVER_PORT = 4003;
-const log: Logger = winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'usersServer', 'debug');
+const log: Logger = winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'UsersService', 'debug');
 
 const start = (app: Application): void => {
   securityMiddleware(app);
   standardMiddleware(app);
   routesMiddleware(app);
-  // startQueues();
+  startQueues();
   startElasticSearch();
   usersErrorHandler(app);
   startServer(app);
@@ -65,13 +60,11 @@ const routesMiddleware = (app: Application): void => {
   appRoutes(app);
 };
 
-// const startQueues = async (): Promise<void> => {
-//   const userChannel: Channel = (await createConnection()) as Channel;
-// //   await consumeBuyerDirectMessage(userChannel);
-// //   await consumeSellerDirectMessage(userChannel);
-// //   await consumeReviewFanoutMessages(userChannel);
-// //   await consumeSeedGigDirectMessages(userChannel);
-// };
+const startQueues = async (): Promise<void> => {
+  const userChannel: Channel = (await createConnection()) as Channel;
+  await consumeBuyerDirectMessage(userChannel);
+  await consumeBuyerDirectMessage(userChannel);
+};
 
 const startElasticSearch = (): void => {
   checkConnection();
@@ -90,9 +83,9 @@ const usersErrorHandler = (app: Application): void => {
 const startServer = (app: Application): void => {
   try {
     const httpServer: http.Server = new http.Server(app);
-    log.info(`Users server has started with process id ${process.pid}`);
+    log.info(`UsersService has started with process id ${process.pid}`);
     httpServer.listen(SERVER_PORT, () => {
-      log.info(`Users server running on port ${SERVER_PORT}`);
+      log.info(`UsersService running on port ${SERVER_PORT}`);
     });
   } catch (error) {
     log.log('error', 'UsersService startServer() method error:', error);

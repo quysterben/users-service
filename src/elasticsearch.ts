@@ -15,11 +15,11 @@ const checkConnection = async (): Promise<void> => {
   while (!isConnected) {
     try {
       const health: ClusterHealthResponse = await elasticSearchClient.cluster.health({});
-      log.info(`Users Service Elasticsearch health status - ${health.status}`);
+      log.info(`UsersService Elasticsearch health status - ${health.status}`);
       isConnected = true;
     } catch (error) {
       log.error('Error connecting to ElasticSearch');
-      log.log('error', 'Users Service checkConnection() method:', error);
+      log.log('error', 'UsersService checkConnection() method:', error);
     }
   }
 };
