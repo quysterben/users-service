@@ -9,11 +9,11 @@ async function createConnection(): Promise<Channel | undefined> {
   try {
     const connection: Connection = await client.connect(`${config.RABBITMQ_ENDPOINT}`);
     const channel: Channel = await connection.createChannel();
-    log.info('UserService connected to queue successfully...');
+    log.info('UsersService connected to queue successfully...');
     closeConnection(channel, connection);
     return channel;
   } catch (error) {
-    log.log('error', 'UserService error createConnection() method:', error);
+    log.log('error', 'UsersService error createConnection() method:', error);
     return undefined;
   }
 }

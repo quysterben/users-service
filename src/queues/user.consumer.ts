@@ -1,4 +1,4 @@
-import { IBuyerDocument, winstonLogger } from '@quysterben/jobber-shared';
+import { IBuyerDocument, ISellerDocument, winstonLogger } from '@quysterben/jobber-shared';
 import { config } from '@users/config';
 import { Channel, ConsumeMessage, Replies } from 'amqplib';
 import { Logger } from 'winston';
@@ -8,8 +8,11 @@ import {
   updateSellerOngoingJobsProp,
   updateSellerCompletedJobsProp,
   updateTotalGigsCount,
-  updateSellerCancelledJobsProp
+  updateSellerCancelledJobsProp,
+  updateSellerReview,
+  getRandomSellers
 } from '@users/services/seller.service';
+import { publishDirectMessage } from '@users/queues/user.producer';
 
 const log: Logger = winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'UsersServiceConsumer', 'debug');
 
@@ -53,7 +56,7 @@ const consumeSellerDirectMessage = async (channel: Channel): Promise<void> => {
     if (!channel) {
       channel = (await createConnection()) as Channel;
     }
-    const exchangeName = 'jobber-seller-update';
+    const exchangeName = 'seller-update';
     const routingKey = 'user-seller';
     const queueName = 'user-seller-queue';
     await channel.assertExchange(exchangeName, 'direct');
@@ -85,4 +88,64 @@ const consumeSellerDirectMessage = async (channel: Channel): Promise<void> => {
   }
 };
 
-export { consumeBuyerDirectMessage, consumeSellerDirectMessage };
+const consumeReviewFanoutMessage = async (channel: Channel): Promise<void> => {
+  try {
+    if (!channel) {
+      channel = (await createConnection()) as Channel;
+    }
+    const exchangeName = 'review';
+    const queueName = 'seller-review-queue';
+    await channel.assertExchange(exchangeName, 'fanout');
+    const jobberQueue: Replies.AssertQueue = await channel.assertQueue(queueName, { durable: true, autoDelete: false });
+    await channel.bindQueue(jobberQueue.queue, exchangeName, '');
+    channel.consume(jobberQueue.queue, async (msg: ConsumeMessage | null) => {
+      const { type } = JSON.parse(msg!.content.toString());
+      if (type === 'buyer-review') {
+        await updateSellerReview(JSON.parse(msg!.content.toString()));
+        await publishDirectMessage(
+          channel,
+          'update-gig',
+          'update-gig',
+          JSON.stringify({ type: 'updateGig', gigReview: msg!.content.toString() }),
+          'Message sent to gig service.'
+        );
+      }
+      channel.ack(msg!);
+    });
+  } catch (error) {
+    log.log('error', 'UsersService consumerReviewFanoutMessage() method error:', error);
+  }
+};
+
+const consumeSeedGigDirectMessage = async (channel: Channel): Promise<void> => {
+  try {
+    if (!channel) {
+      channel = (await createConnection()) as Channel;
+    }
+    const exchangeName = 'gig';
+    const routingKey = 'get-sellers';
+    const queueName = 'user-gig-queue';
+    await channel.assertExchange(exchangeName, 'direct');
+    const jobberQueue: Replies.AssertQueue = await channel.assertQueue(queueName, { durable: true, autoDelete: false });
+    await channel.bindQueue(jobberQueue.queue, exchangeName, routingKey);
+    channel.consume(jobberQueue.queue, async (msg: ConsumeMessage | null) => {
+      const { type } = JSON.parse(msg!.content.toString());
+      if (type === 'getSellers') {
+        const { count } = JSON.parse(msg!.content.toString());
+        const sellers: ISellerDocument[] = await getRandomSellers(parseInt(count, 10));
+        await publishDirectMessage(
+          channel,
+          'seed-gig',
+          'receive-sellers',
+          JSON.stringify({ type: 'receiveSellers', sellers, count }),
+          'Message sent to gig service.'
+        );
+      }
+      channel.ack(msg!);
+    });
+  } catch (error) {
+    log.log('error', 'UsersService consumeSeedGigDirectMessage() method error:', error);
+  }
+};
+
+export { consumeBuyerDirectMessage, consumeSellerDirectMessage, consumeReviewFanoutMessage, consumeSeedGigDirectMessage };
