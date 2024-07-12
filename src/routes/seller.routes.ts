@@ -13,7 +13,7 @@ const sellerRoutes = (): Router => {
   router.get('/id/:sellerId', id);
   router.get('/username/:username', username);
   router.get('/random/:size', random);
-  router.put('/put/:count', seed);
+  router.put('/seed/:count', seed);
 
   return router;
 };
